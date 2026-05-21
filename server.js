@@ -15,7 +15,6 @@ const { generate } = require('./generateData');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('LIFA API kører på port ${PORT}'));
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
