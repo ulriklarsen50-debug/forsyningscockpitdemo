@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIFA Spildevand – Forsyningsoverblik</title>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link  href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --bg0:#08111e;--bg1:#0c1a2e;--bg2:#0f2040;--bg3:#163054;
+  --border:#1e3f6a;--border2:#2a5490;
+  --accent:#2979ff;--accent2:#40c4ff;
+  --text1:#d4e8ff;--text2:#7aaed4;--text3:#4a7aa0;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg0);color:var(--text1);font-size:13px}
+
+/* TOPBAR */
+#topbar{height:48px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{background:var(--accent);color:#fff;font-weight:600;font-size:15px;letter-spacing:1.5px;padding:4px 10px;border-radius:4px}
+.logo-sub{color:var(--accent2);font-size:11px;font-weight:500}
+.topbar-center{color:var(--text1);font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
+.topbar-right{display:flex;align-items:center;gap:10px}
+#dataStatus{font-size:10px;color:var(--text3);font-family:var(--mono)}
+#resetBtn{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:5px 14px;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--font);transition:all .15s}
+#resetBtn:hover{background:var(--bg3);color:var(--text1)}
+
+/* LAYOUT */
+#layout{display:flex;height:calc(100vh - 48px);overflow:hidden}
+
+/* SIDEBAR */
+#sidebar{width:155px;min-width:155px;background:var(--bg1);border-right:1px solid var(--border);padding:10px 8px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.filter-group{display:flex;flex-direction:column;gap:4px}
+.filter-label{color:var(--text3);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.filter-group select,.filter-group input[type=text]{background:var(--bg2);border:1px solid var(--border);color:var(--text1);border-radius:3px;padding:4px 7px;font-size:11px;font-family:var(--font);width:100%;cursor:pointer}
+.filter-group select:focus,.filter-group input:focus{outline:none;border-color:var(--accent)}
+.year-row{display:flex;gap:4px}
+.year-row input{text-align:center;font-family:var(--mono);font-size:11px}
+option{background:var(--bg2)}
+
+/* MAIN */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#chartsRow{display:flex;height:265px;flex-shrink:0;border-bottom:1px solid var(--border)}
+.chart-panel{flex:1;padding:10px 14px;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.chart-panel:last-child{border-right:none}
+.panel-title{color:var(--accent2);font-size:11px;font-weight:500;margin-bottom:8px}
+#bottomRow{display:flex;flex:1;overflow:hidden}
+#tablePanel{flex:1;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+#tablePanelHeader{padding:8px 14px 6px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+#tableScroll{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{background:var(--bg2);color:var(--text2);font-weight:500;padding:5px 8px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+tbody td{padding:4px 8px;border-bottom:1px solid rgba(30,63,106,.4);white-space:nowrap;color:var(--text2)}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--bg3);color:var(--text1)}
+tbody tr.selected td{background:#163054;color:var(--text1);border-left:3px solid var(--accent2)}
+tbody tr.selected td:first-child{padding-left:5px}
+.r-lav{color:#4caf50!important;font-weight:500}.r-middel{color:#fb8c00!important;font-weight:500}
+.r-høj{color:#ef5350!important;font-weight:500}.r-ukendt{color:#78909c!important}
+tfoot td{padding:5px 8px;color:var(--text1);font-weight:600;border-top:1px solid var(--border2);background:var(--bg2);font-family:var(--mono);font-size:11px}
+#rowCount{font-size:10px;color:var(--text3);font-family:var(--mono)}
+#loadMoreRow td{text-align:center;padding:8px;cursor:pointer;color:var(--accent2);font-size:11px}
+#loadMoreRow:hover td{background:var(--bg3)}
+
+/* MAP */
+#mapPanel{width:340px;min-width:280px;flex-shrink:0;position:relative}
+#map{width:100%;height:100%}
+.maplibregl-popup-content{background:var(--bg2);color:var(--text1);font-family:var(--font);font-size:11px;border:1px solid var(--border2);border-radius:6px;padding:10px 12px;box-shadow:none}
+.maplibregl-ctrl-attrib.maplibregl-compact { min-width:24px; }
+.maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) .maplibregl-ctrl-attrib-inner { display:none; }
+.popup-title{font-weight:600;color:var(--accent2);margin-bottom:6px;font-size:12px}
+.popup-row{display:flex;justify-content:space-between;gap:16px;padding:1px 0}
+.popup-label{color:var(--text3)}
+#mapInfo{position:absolute;bottom:8px;left:8px;background:rgba(8,17,30,.8);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:10px;color:var(--text3);font-family:var(--mono);pointer-events:none}
+
+/* RISK MATRIX */
+#matrixWrap{flex:1;display:flex;flex-direction:column;gap:3px;min-height:0;overflow:hidden}
+#matrixBody{flex:1;display:grid;grid-template-columns:38px repeat(5,1fr);grid-template-rows:repeat(5,1fr);gap:2px;min-height:0;overflow:hidden}
+#matrixFooter{display:grid;grid-template-columns:38px 1fr;gap:2px;height:20px;flex-shrink:0}
+.m-yaxis{display:flex;align-items:center;justify-content:flex-end;padding-right:4px;min-height:0}
+.m-xaxis{display:flex;align-items:center;justify-content:center}
+.mc{border-radius:3px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .15s;user-select:none;min-height:0;overflow:hidden}
+.mc span{font-size:9px;font-weight:500;font-family:var(--mono);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none;line-height:1.2;text-align:center}
+.mc:hover{filter:brightness(1.12)}
+.mc.active{outline:2.5px solid #fff;outline-offset:-2px;opacity:1!important}
+.mc.dimmed{opacity:.28}
+
+/* Loading overlay */
+.loading{position:absolute;inset:0;background:rgba(8,17,30,.7);display:flex;align-items:center;justify-content:center;z-index:10;font-size:12px;color:var(--text2);gap:8px}
+.spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent2);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">LIFA</div>
+    <span class="logo-sub">Spildevand</span>
+  </div>
+  <div class="topbar-center">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#40c4ff" stroke-width="2"><ellipse cx="12" cy="12" rx="4" ry="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Forsyningsoverblik
+  </div>
+  <div class="topbar-right">
+    <span id="dataStatus">Indlæser...</span>
+    <button id="resetBtn">Nulstil filtre</button>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="sidebar">
+    <div class="filter-group">
+      <span class="filter-label">Etableringsår</span>
+      <div class="year-row">
+        <input type="text" id="yearFrom" value="1920">
+        <input type="text" id="yearTo" value="2026">
+      </div>
+    </div>
+    <div class="filter-group"><span class="filter-label">Status</span><select id="fStatus"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Ejer</span><select id="fEjer"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Ledningstype</span><select id="fLedningstype"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Ledningsmateriale</span><select id="fMateriale"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Dimension</span><select id="fDimension"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">System</span><select id="fSystem"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Lokalitet</span><select id="fLokalitet"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Risikoprofil</span><select id="fRisiko"><option value="">All</option></select></div>
+    <div class="filter-group"><span class="filter-label">Sanering</span><select id="fSanering"><option value="">All</option></select></div>
+  </div>
+
+  <div id="main">
+    <div id="chartsRow">
+      <div class="chart-panel" style="flex:1.3">
+        <div class="panel-title">Antal meter ledning fordelt på etableringsår</div>
+        <div style="flex:1;position:relative;min-height:0">
+          <canvas id="barChart" role="img" aria-label="Meter ledning per år"></canvas>
+        </div>
+      </div>
+      <div class="chart-panel" style="flex:0.95">
+        <div class="panel-title">Risikoprofil inklusiv sum af antal meter ledning</div>
+        <div id="matrixWrap">
+          <div id="matrixBody"></div>
+          <div id="matrixFooter"></div>
+        </div>
+      </div>
+    </div>
+    <div id="bottomRow">
+      <div id="tablePanel">
+        <div id="tablePanelHeader">
+          <span class="panel-title" style="margin:0">Antal meter ledning</span>
+          <span id="rowCount"></span>
+        </div>
+        <div id="tableScroll">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>Knude (op)</th><th>Knude (ned)</th><th>Etabl.</th>
+              <th>Lokalitet</th><th>Dim.</th><th>Materiale</th>
+              <th>Alder</th><th>Længde(m)</th><th>Risiko</th>
+            </tr></thead>
+            <tbody id="tBody"></tbody>
+            <tfoot><tr>
+              <td colspan="8">Total (filtreret)</td>
+              <td id="totalLen">–</td><td></td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+      <div id="mapPanel">
+        <div id="map"></div>
+        <div id="mapInfo">Viser op til 5.000 ledninger</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://forsyningscockpitdemo-production.up.railway.app'; // same origin
+
+// ── MATRIX SETUP ─────────────────────────────────────────────────────────────
+const G='#4caf50', Y='#fdd835', R='#e53935';
+const MATRIX_COLORS = [
+  [Y, R, R, R, R],  // sand=4 øverst
+  [Y, Y, R, R, R],  // sand=3
+  [G, Y, Y, R, R],  // sand=2
+  [G, G, Y, Y, Y],  // sand=1
+  [G, G, G, Y, Y],  // sand=0 nederst
+];
+const DISPLAY_TO_SAND = [4,3,2,1,0];
+const SAND_LABELS = ['Meget lav','Lav','Middel','Høj','Meget høj'];
+const KONS_LABELS = ['Meget lav','Lav','Middel','Høj','Meget høj'];
+const matrixSelected = new Set();
+const matrixCells = {};
+
+const bodyEl = document.getElementById('matrixBody');
+for (let dr=0; dr<5; dr++) {
+  const sand = DISPLAY_TO_SAND[dr];
+  const yl = document.createElement('div');
+  yl.className = 'm-yaxis';
+  yl.innerHTML = dr===2 ? `<span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;color:var(--text2)">Sandsynlighed</span>` : '';
+  bodyEl.appendChild(yl);
+  for (let c=0; c<5; c++) {
+    const cell = document.createElement('div');
+    cell.className = 'mc';
+    cell.style.background = MATRIX_COLORS[dr][c];
+    cell.innerHTML = `<span>–</span>`;
+    cell.title = `${SAND_LABELS[sand]} × ${KONS_LABELS[c]}`;
+    cell.addEventListener('click', () => {
+      const key = `${sand},${c}`;
+      matrixSelected.has(key) ? matrixSelected.delete(key) : matrixSelected.add(key);
+      updateMatrixVisual();
+      fetchAll();
+    });
+    matrixCells[`${sand},${c}`] = cell;
+    bodyEl.appendChild(cell);
+  }
+}
+const footEl = document.getElementById('matrixFooter');
+footEl.appendChild(document.createElement('div'));
+const xlWrap = document.createElement('div');
+xlWrap.style.cssText='display:flex;align-items:center;justify-content:center';
+xlWrap.innerHTML=`<span style="font-size:9px;color:var(--text2)">Konsekvens</span>`;
+footEl.appendChild(xlWrap);
+
+function updateMatrixVisual() {
+  if (matrixSelected.size===0) {
+    Object.values(matrixCells).forEach(c => c.classList.remove('active','dimmed'));
+  } else {
+    Object.entries(matrixCells).forEach(([key,cell]) => {
+      if (matrixSelected.has(key)) { cell.classList.add('active'); cell.classList.remove('dimmed'); }
+      else { cell.classList.remove('active'); cell.classList.add('dimmed'); }
+    });
+  }
+}
+
+// ── MAPLIBRE GL SETUP ─────────────────────────────────────────────────────────
+const map = new maplibregl.Map({
+  container: 'map',
+  attributionControl: false,
+  style: {
+    version: 8,
+    sources: {
+      'carto': {
+        type: 'raster',
+        tiles: ['https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+                'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© OpenStreetMap © CARTO',
+      }
+    },
+    layers: [{ id:'bg', type:'raster', source:'carto' }]
+  },
+  center: [8.454, 56.362],
+  zoom: 10,
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+const RISK_COLORS_MAP = {
+  Lav:'#4caf50', Middel:'#fb8c00', Høj:'#ef5350', Ukendt:'#78909c'
+};
+
+map.on('load', () => {
+  map.addSource('pipes', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+  map.addLayer({
+    id: 'pipes-layer',
+    type: 'line',
+    source: 'pipes',
+    layout: { 'line-cap':'round', 'line-join':'round' },
+    paint: {
+      'line-color': ['match',['get','risiko'],
+        'Lav','#4caf50','Middel','#fb8c00','Høj','#ef5350','#78909c'],
+      'line-width': ['interpolate',['linear'],['zoom'],
+        10,1.5, 14,3, 18,6],
+      'line-opacity': 0.85,
+    }
+  });
+
+  // Popup on click
+  map.on('click','pipes-layer', e => {
+    const p = e.features[0].properties;
+    const color = RISK_COLORS_MAP[p.risiko]||'#78909c';
+    new maplibregl.Popup({ closeButton:true, maxWidth:'260px' })
+      .setLngLat(e.lngLat)
+      .setHTML(`
+        <div class="popup-title">${p.id}</div>
+        <div class="popup-row"><span class="popup-label">Materiale</span><span>${p.materiale}</span></div>
+        <div class="popup-row"><span class="popup-label">Dimension</span><span>${p.dim} mm</span></div>
+        <div class="popup-row"><span class="popup-label">Alder</span><span>${p.alder} år</span></div>
+        <div class="popup-row"><span class="popup-label">Længde</span><span>${p.laengde} m</span></div>
+        <div class="popup-row"><span class="popup-label">Risiko</span><span style="color:${color};font-weight:500">${p.risiko}</span></div>
+      `)
+      .addTo(map);
+  });
+  map.on('mouseenter','pipes-layer', () => map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave','pipes-layer', () => map.getCanvas().style.cursor='');
+});
+
+// Kald initFilters med det samme — vent ikke på kortets load-event
+initFilters();
+
+// ── BAR CHART ────────────────────────────────────────────────────────────────
+const barCtx = document.getElementById('barChart');
+const allYears = Array.from({length:106}, (_,i) => 1920+i);
+const barChart = new Chart(barCtx, {
+  type: 'bar',
+  data: { labels: allYears, datasets:[{ data: allYears.map(()=>0), backgroundColor:'#1565c0', borderWidth:0, barPercentage:1, categoryPercentage:1 }] },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{
+      title: c=>`År: ${c[0].label}`,
+      label: c=>`${Math.round(c.raw).toLocaleString('da-DK')} m`
+    }}},
+    scales:{
+      x:{ ticks:{color:'#4a7aa0',font:{size:9},maxTicksLimit:8,autoSkip:true}, grid:{color:'rgba(30,63,106,.4)'} },
+      y:{ ticks:{color:'#4a7aa0',font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}, grid:{color:'rgba(30,63,106,.4)'} }
+    }
+  }
+});
+
+// ── FILTER HELPERS ────────────────────────────────────────────────────────────
+function getFilters() {
+  const q = {};
+  const yf = document.getElementById('yearFrom').value.trim();
+  const yt = document.getElementById('yearTo').value.trim();
+  if (yf) q.yearFrom = yf;
+  if (yt) q.yearTo   = yt;
+  ['fStatus:status','fEjer:ejer','fLedningstype:ledningstype','fMateriale:materiale',
+   'fDimension:dim','fSystem:system','fLokalitet:lokalitet','fRisiko:risiko','fSanering:sanering']
+    .forEach(s => {
+      const [id,key] = s.split(':');
+      const v = document.getElementById(id).value;
+      if (v) q[key] = v;
+    });
+  if (matrixSelected.size > 0)
+    q.matrix = [...matrixSelected].join('|');
+  return q;
+}
+
+function toQueryString(q) {
+  const params = Object.entries(q)
+    .filter(([,v]) => v !== undefined && v !== null && v !== '')
+    .map(([k,v]) => `${k}=${encodeURIComponent(v)}`);
+  return params.length ? '?' + params.join('&') : '';
+}
+
+// ── DEBOUNCE ──────────────────────────────────────────────────────────────────
+let debounceTimer;
+function debounce(fn, ms=300) {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(fn, ms);
+}
+
+// ── INIT: load filter dropdown options ───────────────────────────────────────
+async function initFilters() {
+  const vals = await fetch(`${API}/api/filter-values`).then(r=>r.json());
+  const map_ = {fStatus:'status',fEjer:'ejer',fLedningstype:'ledningstype',fMateriale:'materiale',
+    fDimension:'dim',fSystem:'system',fLokalitet:'lokalitet',fRisiko:'risiko',fSanering:'sanering'};
+  Object.entries(map_).forEach(([id,key]) => {
+    const sel = document.getElementById(id);
+    (vals[key]||[]).forEach(v => {
+      const o = document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
+    });
+  });
+  document.getElementById('dataStatus').textContent = '100.000 ledninger';
+  await fetchAll();
+}
+
+// ── MAIN FETCH: fires all API calls in parallel ───────────────────────────────
+let tablePage = 0;
+let currentTotal = 0;
+
+async function fetchMap() {
+  const q = getFilters();
+  const qs = toQueryString(q);
+  const geoData = await fetch(`${API}/api/geojson${qs}`).then(r=>r.json());
+  updateMap(geoData);
+
+  // Auto-zoom hvis der er aktive filtre eller tabel-selektion
+  const hasFilters = Object.keys(q).some(k => k !== 'yearFrom' && k !== 'yearTo');
+  const hasYearFilter = q.yearFrom !== '1920' || q.yearTo !== '2026';
+  if ((hasFilters || hasYearFilter) && geoData.features && geoData.features.length > 0) {
+    let minLng=Infinity, minLat=Infinity, maxLng=-Infinity, maxLat=-Infinity;
+    geoData.features.forEach(f => {
+      f.geometry.coordinates.forEach(([lng,lat]) => {
+        if (lng < minLng) minLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lng > maxLng) maxLng = lng;
+        if (lat > maxLat) maxLat = lat;
+      });
+    });
+    map.fitBounds([[minLng, minLat],[maxLng, maxLat]], {
+      padding: 60,
+      maxZoom: 16,
+      duration: 800,
+    });
+  }
+}
+
+async function fetchAll() {
+  tablePage = 0;
+  const q = getFilters(); // aldrig selectedPipeIds her
+  const qs = toQueryString(q);
+
+  const [matrixData, tableData, barData] = await Promise.all([
+    fetch(`${API}/api/matrix${toQueryString({...q, matrix:undefined})}`).then(r=>r.json()),
+    fetch(`${API}/api/table${qs}&limit=100&page=0`).then(r=>r.json()),
+    fetch(`${API}/api/barchart${qs}`).then(r=>r.json()),
+  ]);
+
+  updateMatrix(matrixData);
+  updateTable(tableData, false);
+  updateBarChart(barData);
+  fetchMap();
+}
+
+async function loadMoreTable() {
+  tablePage++;
+  const q = getFilters();
+  const qs = toQueryString(q);
+  const tableData = await fetch(`${API}/api/table${qs}&limit=100&page=${tablePage}`).then(r=>r.json());
+  updateTable(tableData, true);
+}
+
+// ── UPDATE FUNCTIONS ──────────────────────────────────────────────────────────
+const selectedPipeIds = new Set(); // multi-selektion
+
+function updateMatrix(data) {
+  for (let dr=0; dr<5; dr++) {
+    const sand = DISPLAY_TO_SAND[dr];
+    for (let c=0; c<5; c++) {
+      const cell = matrixCells[`${sand},${c}`];
+      if (cell) {
+        const v = data.sums[sand][c];
+        cell.querySelector('span').textContent = Math.round(v).toLocaleString('da-DK');
+      }
+    }
+  }
+}
+
+function updateMap(geojson) {
+  if (!map.loaded() || !map.getSource('pipes')) {
+    map.once('load', () => updateMap(geojson));
+    return;
+  }
+  map.getSource('pipes').setData(geojson);
+  const shown = geojson._shown || geojson.features.length;
+  const total = geojson._total || shown;
+  document.getElementById('mapInfo').textContent =
+    total > shown ? `Viser ${shown.toLocaleString()} af ${total.toLocaleString()} ledninger` : `Viser ${shown.toLocaleString()} ledninger`;
+}
+
+function clearTableSelection() {
+  selectedPipeIds.clear();
+  document.querySelectorAll('tbody tr.selected').forEach(r => r.classList.remove('selected'));
+}
+
+function getFiltersWithSelection() {
+  const q = getFilters();
+  if (selectedPipeIds.size > 0) q.ids = [...selectedPipeIds].join(',');
+  return q;
+}
+
+async function applyTableSelection() {
+  const q = getFiltersWithSelection();
+  const qs = toQueryString(q);
+  const qNoMatrix = toQueryString({...q, matrix: undefined});
+
+  const [matrixData, geoData, barData] = await Promise.all([
+    fetch(`${API}/api/matrix${qNoMatrix}`).then(r=>r.json()),
+    fetch(`${API}/api/geojson${qs}`).then(r=>r.json()),
+    fetch(`${API}/api/barchart${qs}`).then(r=>r.json()),
+  ]);
+
+  updateMatrix(matrixData);
+  updateMap(geoData);
+  updateBarChart(barData);
+
+  // Zoom til alle valgte ledningers bounding box
+  if (geoData.features && geoData.features.length > 0) {
+    let minLng=Infinity, minLat=Infinity, maxLng=-Infinity, maxLat=-Infinity;
+    geoData.features.forEach(f => {
+      f.geometry.coordinates.forEach(([lng,lat]) => {
+        if (lng < minLng) minLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lng > maxLng) maxLng = lng;
+        if (lat > maxLat) maxLat = lat;
+      });
+    });
+    map.fitBounds([[minLng, minLat],[maxLng, maxLat]], {
+      padding: 80,
+      maxZoom: 18,
+      duration: 800,
+    });
+  }
+}
+
+function updateTable(data, append) {
+  currentTotal = data.total;
+  const tbody = document.getElementById('tBody');
+  const lmr = document.getElementById('loadMoreRow');
+  if (lmr) lmr.remove();
+  if (!append) tbody.innerHTML = '';
+
+  data.rows.forEach(p => {
+    const tr = document.createElement('tr');
+    if (selectedPipeIds.has(p.id)) tr.classList.add('selected');
+    tr.innerHTML = `<td>${p.id}</td><td>${p.knude_op}</td><td>${p.knude_ned}</td><td>${p.etab.slice(0,7)}</td><td>${p.lokalitet}</td><td>${p.dim}</td><td>${p.materiale}</td><td>${p.alder}</td><td>${p.laengde}</td><td class="r-${p.risiko.toLowerCase()}">${p.risiko}</td>`;
+
+    tr.addEventListener('click', (e) => {
+      const multi = e.ctrlKey || e.metaKey;
+      if (!multi) {
+        // Enkelt klik: ryd andre valg
+        document.querySelectorAll('tbody tr.selected').forEach(r => r.classList.remove('selected'));
+        selectedPipeIds.clear();
+      }
+      if (selectedPipeIds.has(p.id)) {
+        selectedPipeIds.delete(p.id);
+        tr.classList.remove('selected');
+      } else {
+        selectedPipeIds.add(p.id);
+        tr.classList.add('selected');
+      }
+      if (selectedPipeIds.size > 0) {
+        applyTableSelection();
+      } else {
+        fetchAll(); // ingen valg — vis alt
+      }
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  const shown = (tablePage+1)*100;
+  if (shown < data.total) {
+    const tr = document.createElement('tr');
+    tr.id = 'loadMoreRow';
+    tr.innerHTML = `<td colspan="10">↓ Vis flere (${data.total.toLocaleString()} total) — klik for at indlæse næste 100</td>`;
+    tr.addEventListener('click', loadMoreTable);
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('totalLen').textContent =
+    Math.round(data.total_laengde).toLocaleString('da-DK') + ' m';
+  document.getElementById('rowCount').textContent =
+    `${data.total.toLocaleString('da-DK')} ledninger`;
+}
+
+function updateBarChart(byYear) {
+  const vals = allYears.map(y => byYear[y] || 0);
+  const hasFilter = Object.keys(getFilters()).length > 0;
+  barChart.data.datasets[0].data = vals;
+  barChart.data.datasets[0].backgroundColor = '#1565c0';
+  barChart.update('none');
+}
+
+// ── LISTENERS ─────────────────────────────────────────────────────────────────
+['fStatus','fEjer','fLedningstype','fMateriale','fDimension','fSystem','fLokalitet','fRisiko','fSanering']
+  .forEach(id => document.getElementById(id).addEventListener('change', () => debounce(fetchAll)));
+['yearFrom','yearTo']
+  .forEach(id => document.getElementById(id).addEventListener('change', () => debounce(fetchAll)));
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  // Nulstil år
+  document.getElementById('yearFrom').value='1920';
+  document.getElementById('yearTo').value='2026';
+  // Nulstil alle dropdowns
+  ['fStatus','fEjer','fLedningstype','fMateriale','fDimension','fSystem','fLokalitet','fRisiko','fSanering']
+    .forEach(id => document.getElementById(id).value='');
+  // Nulstil matrix-selektion
+  matrixSelected.clear();
+  updateMatrixVisual();
+  // Nulstil tabel-selektion
+  clearTableSelection();
+  // Hent alt data igen uden filtre
+  tablePage = 0;
+  fetchAll();
+});
+</script>
+</body>
+</html>
